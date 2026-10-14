@@ -25,6 +25,159 @@ COLUNAS = ["cimento", "escoria", "cinza", "agua", "superplast",
 URL_DATASET = "https://archive.ics.uci.edu/ml/machine-learning-databases/concrete/compressive/Concrete_Data.xls"
 URL_IMAGEM = "https://i.postimg.cc/nzYgGKgB/images.jpg"
 
+# ----------------------------------------------------------------------------
+# Trechos de código exibidos no app (iguais aos do notebook)
+# ----------------------------------------------------------------------------
+SNIPPETS = {
+    # 1. Visão geral
+    "leitura": '''import pandas as pd
+import urllib.request
+
+url_dataset = "https://archive.ics.uci.edu/ml/machine-learning-databases/concrete/compressive/Concrete_Data.xls"
+urllib.request.urlretrieve(url_dataset, "Concrete_Data.xls")
+
+# Carregamento do ficheiro bruto Excel
+df = pd.read_excel("Concrete_Data.xls")''',
+
+    # 2. Dados e limpeza
+    "renomear": '''# Renomeação das colunas para o português
+df.columns = [
+    "cimento", "escoria", "cinza", "agua", "superplast",
+    "agregado_graudo", "agregado_miudo", "idade", "resistencia"
+]
+
+# Primeiras linhas do dataset
+df.head()''',
+    "info": '''# Tipos de dados de cada coluna (todas devem ser numéricas)
+df.info()''',
+    "nulos": '''# Verificação de valores nulos
+print(df.isnull().sum())''',
+    "duplicados": '''# Remoção de duplicados
+df = df.drop_duplicates()
+print(f"Quantidade de linhas após remover duplicados: {df.shape[0]}")
+print(f"Dados duplicados: {df.duplicated().sum()}")''',
+    "zeros": '''# Contagem de valores zero por coluna
+# Zero em escória, cinza e superplastificante = ingrediente ausente na receita (não é erro)
+print((df == 0).sum())''',
+    "describe": '''# Estatísticas descritivas
+df.describe()''',
+
+    # 3. Outliers
+    "iqr": '''# Contagem de outliers pelo critério IQR (1.5 x IQR) em todas as colunas
+q1 = df.quantile(0.25)
+q3 = df.quantile(0.75)
+iqr = q3 - q1
+outliers = ((df < q1 - 1.5 * iqr) | (df > q3 + 1.5 * iqr)).sum()
+print(outliers)''',
+    "boxplot": '''# Boxplot de cada variável (um gráfico por coluna, pois as escalas são diferentes)
+df.plot(kind="box", subplots=True, layout=(3, 3), sharey=False, figsize=(12, 8), color="teal")
+plt.tight_layout()
+plt.show()''',
+    "copia": '''# Gerar dataset final cópia
+df_limpo = df.copy()''',
+
+    # 4. Atributos e correlação
+    "log_idade": 'df["log_idade"] = np.log(df["idade"])',
+    "agua_cimento": 'df["agua_cimento"] = df["agua"] / df["cimento"]',
+    "pearson": '''# Estudo da Correlação de Pearson com a Resistência
+corr = df.corr()["resistencia"].drop("resistencia").sort_values()
+corr.plot(kind="barh", color="teal")''',
+    "heatmap": '''# Correlação entre as variáveis (multicolinearidade)
+sns.heatmap(df.corr(), annot=True, fmt=".2f", cmap="coolwarm", center=0)''',
+    "relacoes": '''# Relações principais (o valor de r é calculado a partir da correlação)
+sns.scatterplot(data=df, x="cimento", y="resistencia", alpha=0.6, color="blue")
+sns.scatterplot(data=df, x="agua_cimento", y="resistencia", alpha=0.6, color="chocolate")
+sns.scatterplot(data=df, x="log_idade", y="resistencia", alpha=0.6, color="green")''',
+
+    # 5. Modelagem
+    "separacao": '''# Definição das variáveis preditoras de entrada X e da variável alvo y
+X = df.drop(columns=["resistencia", "idade"])
+y = df["resistencia"]''',
+    "split": '''# Divisão do conjunto em dados de treino (80%) e dados de teste (20%)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)''',
+    "pipeline": '''# Configuração do Pipeline com StandardScaler e Ridge Regression
+pipe = Pipeline([
+    ("scaler", StandardScaler()),
+    ("ridge", Ridge(alpha=1.0))
+])''',
+    "cv": '''# Validação Cruzada (5 folds) e Treinamento do modelo nos dados de treino
+scores_cv = cross_val_score(pipe, X_train, y_train, cv=5, scoring="r2")
+print(f"Média do R² na Validação Cruzada: {scores_cv.mean():.2f} (+/- {scores_cv.std() * 2:.2f})")
+
+# Treinamento final
+pipe.fit(X_train, y_train)''',
+    "grid": '''# Busca do melhor alpha com validação cruzada (somente dados de treino)
+parametros = {"ridge__alpha": [0.01, 0.1, 1, 10, 100]}
+busca = GridSearchCV(pipe, parametros, cv=5, scoring="r2")
+busca.fit(X_train, y_train)
+print(f"Melhor alpha: {busca.best_params_['ridge__alpha']} | R² na validação cruzada: {busca.best_score_:.2f}")
+
+# Modelo final: melhor pipeline, já treinado nos dados de treino
+pipe = busca.best_estimator_''',
+
+    # 6. Avaliação
+    "predict": '''# Previsão no conjunto de teste
+y_pred = pipe.predict(X_test)''',
+    "r2": '''# Cálculo do R²
+r2 = r2_score(y_test, y_pred)
+print(f"R² no conjunto de teste: {r2:.2f}")''',
+    "rmse": '''# Cálculo do RMSE
+rmse = mean_squared_error(y_test, y_pred) ** 0.5
+print(f"RMSE no conjunto de teste: {rmse:.2f} MPa")''',
+    "mae": '''# Cálculo do MAE
+mae = mean_absolute_error(y_test, y_pred)
+print(f"MAE no conjunto de teste: {mae:.2f} MPa")''',
+    "residuos": '''# Resíduos = valor real - valor previsto
+residuos = y_test - y_pred
+print(f"Resíduo médio: {residuos.mean():+.2f} MPa")
+
+# Real vs Previsto (quanto mais perto da linha, melhor)
+plt.scatter(y_test, y_pred, alpha=0.6, color="steelblue")
+plt.plot([y.min(), y.max()], [y.min(), y.max()], color="black")
+
+# Distribuição dos resíduos (deve estar centrada perto de zero)
+plt.hist(residuos, bins=25, color="steelblue", edgecolor="white")''',
+    "overfit": '''# Comparação de modelos: R² no treino vs R² no teste
+modelos = {
+    "Baseline (média)": DummyRegressor(),
+    "Regressão Linear": LinearRegression(),
+    "Ridge (final)": Ridge(alpha=pipe.named_steps["ridge"].alpha),
+    "Gradient Boosting": GradientBoostingRegressor(random_state=42),
+}
+
+resultados = []
+for nome, modelo in modelos.items():
+    m = Pipeline([("scaler", StandardScaler()), ("modelo", modelo)])
+    m.fit(X_train, y_train)
+    r2_treino = r2_score(y_train, m.predict(X_train))
+    r2_teste = r2_score(y_test, m.predict(X_test))
+    rmse_teste = mean_squared_error(y_test, m.predict(X_test)) ** 0.5
+    resultados.append([nome, r2_treino, r2_teste, r2_treino - r2_teste, rmse_teste])''',
+    "coef": '''# Coeficientes do Ridge (variáveis padronizadas)
+coef = pd.Series(pipe.named_steps["ridge"].coef_, index=X.columns).sort_values()''',
+
+    # 7. Deploy
+    "joblib": '''# Exportação do pipeline de modelo treinado para ficheiro externo
+joblib.dump(pipe, "modelo_concreto.joblib")''',
+    "carregar_modelo": '''# Carregar o modelo salvo e fazer uma previsão
+pipe = joblib.load("modelo_concreto.joblib")
+predicao = pipe.predict(entrada)[0]''',
+    "entrada": '''# Recria as mesmas features do treino (mesma ordem de colunas)
+entrada = pd.DataFrame([{
+    "cimento": cimento, "escoria": escoria, "cinza": cinza, "agua": agua,
+    "superplast": superplast, "agregado_graudo": agregado_graudo,
+    "agregado_miudo": agregado_miudo,
+    "log_idade": np.log(idade), "agua_cimento": agua / cimento,
+}])''',
+}
+
+
+def mostrar_codigo(chave, container=st):
+    """Exibe um trecho de código do notebook."""
+    container.code(SNIPPETS[chave], language="python")
+
 
 # ----------------------------------------------------------------------------
 # Funções de dados e modelo (com cache para o app ficar rápido)
@@ -155,7 +308,7 @@ abas = st.tabs([
 # 1. Visão geral
 # ----------------------------------------------------------------------------
 with abas[0]:
-   
+
     st.header("Entendimento do Negócio")
     st.write(
         "O processo envolve a fabricação e controle de qualidade do concreto na engenharia civil, "
@@ -174,6 +327,10 @@ with abas[0]:
             "Um modelo de aprendizado de máquina (Regressão Ridge) integrado a um aplicativo em Streamlit, "
             "que recebe os ingredientes da dosagem e a idade de cura para fornecer uma estimativa "
             "instantânea da resistência em MPa antes da fabricação física.")
+
+    st.subheader("Importação e leitura dos dados")
+    st.write("O dataset **Concrete_Data.xls** é baixado automaticamente do UCI e lido com o pandas.")
+    mostrar_codigo("leitura")
 
     st.subheader("Etapas do projeto")
     st.markdown(
@@ -195,32 +352,38 @@ with abas[1]:
     st.subheader("Leitura e renomeação das colunas")
     st.write(f"O arquivo bruto tem **{df_bruto.shape[0]} linhas** e **{df_bruto.shape[1]} colunas**, "
              "renomeadas para o português.")
+    mostrar_codigo("renomear")
     st.dataframe(df_renomeado.head(), use_container_width=True)
 
     st.subheader("Tipos de variáveis")
+    mostrar_codigo("info")
     tipos = df_renomeado.dtypes.astype(str).rename("tipo").to_frame()
     tipos["não nulos"] = df_renomeado.notnull().sum()
     st.dataframe(tipos, use_container_width=True)
     st.caption("Todas as colunas são numéricas (8 float e 1 int), então não é necessário codificar variáveis.")
 
     st.subheader("Valores nulos")
+    mostrar_codigo("nulos")
     nulos = df_renomeado.isnull().sum()
     c1, c2 = st.columns([1, 2])
     c1.metric("Total de nulos", int(nulos.sum()))
     c2.dataframe(nulos.rename("nulos").to_frame().T, use_container_width=True)
 
     st.subheader("Remoção de duplicados")
+    mostrar_codigo("duplicados")
     c1, c2, c3 = st.columns(3)
     c1.metric("Linhas antes", len(df_bruto))
     c2.metric("Duplicadas removidas", n_duplicados)
     c3.metric("Linhas depois", len(df))
 
     st.subheader("Valores zero")
+    mostrar_codigo("zeros")
     zeros = (df[COLUNAS] == 0).sum().rename("zeros").to_frame().T
     st.dataframe(zeros, use_container_width=True)
     st.caption("Zero em escória, cinza e superplastificante significa ingrediente ausente na receita (não é erro).")
 
     st.subheader("Estatísticas descritivas")
+    mostrar_codigo("describe")
     st.dataframe(df[COLUNAS].describe(), use_container_width=True)
 
 # ----------------------------------------------------------------------------
@@ -230,6 +393,9 @@ with abas[2]:
     st.header("Análise de Outliers")
     st.write("Contagem de outliers pelo critério IQR (1.5 × IQR) em todas as colunas, "
              "seguida de um boxplot por variável (as escalas são diferentes).")
+
+    st.subheader("Contagem de outliers (IQR)")
+    mostrar_codigo("iqr")
 
     dados = df[COLUNAS]
     q1 = dados.quantile(0.25)
@@ -242,6 +408,7 @@ with abas[2]:
 
     # Boxplots (um por coluna, grade 3 x 3)
     st.subheader("Boxplot de cada variável")
+    # mostrar_codigo("boxplot")
     for i in range(0, len(COLUNAS), 3):
         cols = st.columns(3)
         for col_st, nome in zip(cols, COLUNAS[i:i + 3]):
@@ -267,6 +434,8 @@ with abas[2]:
         "cenário. A penalização Ridge ajuda a suavizar o impacto de variáveis com alta variância e reduz a "
         "sensibilidade do modelo a observações extremas (outliers), mitigando o risco de overfitting sem a "
         "necessidade de descartar dados valiosos.")
+    st.write("Como os outliers são mantidos, o dataset final é apenas uma cópia dos dados já limpos:")
+    mostrar_codigo("copia")
 
 # ----------------------------------------------------------------------------
 # 4. Atributos e correlação
@@ -277,9 +446,9 @@ with abas[3]:
     st.subheader("Criação de novas variáveis")
     c1, c2 = st.columns(2)
     c1.markdown("**`log_idade`**: aplicação do logaritmo à idade para linearizar o ganho de força ao longo do tempo.")
-    c1.code('df["log_idade"] = np.log(df["idade"])', language="python")
+    mostrar_codigo("log_idade", c1)
     c2.markdown("**`agua_cimento`**: cálculo da razão água/cimento com base na Lei de Abrams.")
-    c2.code('df["agua_cimento"] = df["agua"] / df["cimento"]', language="python")
+    mostrar_codigo("agua_cimento", c2)
     st.dataframe(df[["idade", "log_idade", "agua", "cimento", "agua_cimento"]].head(), use_container_width=True)
 
     st.markdown(
@@ -295,6 +464,7 @@ with abas[3]:
     st.write("Estudo da Correlação de Pearson para identificar quais as variáveis que mais se correlacionam "
              "positivamente (ex: `log_idade`, `cimento`) ou negativamente (ex: `agua_cimento`, `agua`) "
              "com a resistência.")
+    mostrar_codigo("pearson")
 
     corr = df.corr()["resistencia"].drop("resistencia").sort_values()
     df_corr = corr.reset_index()
@@ -312,6 +482,7 @@ with abas[3]:
     st.altair_chart(chart_corr, use_container_width=True)
 
     st.subheader("Matriz de correlação entre as variáveis")
+    # mostrar_codigo("heatmap")
     matriz_corr = df.corr().reset_index().melt(id_vars="index")
     matriz_corr.columns = ["Variável 1", "Variável 2", "Correlação"]
 
@@ -336,6 +507,7 @@ with abas[3]:
                 "penalização L2 do Ridge.")
 
     st.subheader("Relações principais com a resistência")
+    mostrar_codigo("relacoes")
     c1, c2, c3 = st.columns(3)
     relacoes = [
         (c1, "cimento", "Cimento (kg/m³)", "Cimento vs Resistência", "blue"),
@@ -358,12 +530,11 @@ with abas[4]:
     st.subheader("Separação de variáveis")
     st.write("Definição das variáveis preditoras de entrada **X** (excluindo a resistência e a idade bruta) "
              "e da variável alvo **y** (resistência em MPa).")
-    st.code('X = df.drop(columns=["resistencia", "idade"])\ny = df["resistencia"]', language="python")
+    mostrar_codigo("separacao")
     st.write("Colunas de X:", ", ".join(res["X"].columns))
 
     st.subheader("Divisão treino e teste (80% / 20%)")
-    st.code('X_train, X_test, y_train, y_test = train_test_split(\n'
-            '    X, y, test_size=0.2, random_state=42\n)', language="python")
+    mostrar_codigo("split")
     c1, c2 = st.columns(2)
     c1.metric("Treino", f"{len(res['X_train'])} linhas")
     c2.metric("Teste", f"{len(res['X_test'])} linhas")
@@ -372,10 +543,10 @@ with abas[4]:
     st.write("Fluxo que inclui a normalização de escala com StandardScaler (média 0 e desvio padrão 1) "
              "e o modelo de Regressão Ridge com penalização L2 (`Ridge(alpha=1.0)`) para controlar o overfitting. "
              "O scaler fica dentro do Pipeline, então a validação cruzada não tem vazamento de dados.")
-    st.code('pipe = Pipeline([\n    ("scaler", StandardScaler()),\n    ("ridge", Ridge(alpha=1.0))\n])',
-            language="python")
+    mostrar_codigo("pipeline")
 
     st.subheader("Validação cruzada (5 folds)")
+    mostrar_codigo("cv")
     scores = res["scores_cv"]
     c1, c2 = st.columns([1, 2])
     c1.metric("R² médio (CV)", f"{scores.mean():.2f}", f"± {scores.std() * 2:.2f}", delta_color="off")
@@ -394,6 +565,7 @@ with abas[4]:
     st.subheader("Ajuste do hiperparâmetro alpha")
     st.write("Busca do melhor `alpha` do Ridge por validação cruzada (5 folds), usando apenas os dados de treino. "
              "O modelo final é o pipeline com o melhor alpha.")
+    mostrar_codigo("grid")
     df_alpha = pd.DataFrame({
         "alpha": res["alphas"],
         "R2_medio": res["cv_alphas"]
@@ -414,6 +586,9 @@ with abas[5]:
     y_test, y_pred = res["y_test"], res["y_pred"]
     residuos = y_test - y_pred
 
+    st.subheader("Previsão no conjunto de teste")
+    mostrar_codigo("predict")
+
     st.subheader("Métricas no conjunto de teste")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("R²", f"{res['r2']:.2f}", help="Variância da resistência explicada pelo modelo")
@@ -421,7 +596,16 @@ with abas[5]:
     c3.metric("MAE", f"{res['mae']:.2f} MPa", help="Erro absoluto médio, sem peso extra para erros grandes")
     c4.metric("Resíduo médio", f"{residuos.mean():+.2f} MPa", help="Deve estar perto de zero")
 
+    c1, c2, c3 = st.columns(3)
+    c1.caption("R²")
+    mostrar_codigo("r2", c1)
+    c2.caption("RMSE")
+    mostrar_codigo("rmse", c2)
+    c3.caption("MAE")
+    mostrar_codigo("mae", c3)
+
     st.subheader("Real vs previsto e resíduos")
+    mostrar_codigo("residuos")
     c1, c2 = st.columns(2)
 
     df_scatter = pd.DataFrame({"Real": y_test, "Previsto": y_pred})
@@ -448,17 +632,22 @@ with abas[5]:
     st.write("Comparação do R² de treino e de teste do Ridge com um baseline (média), a Regressão Linear e um "
              "modelo não linear (Gradient Boosting). Treino muito acima do teste indica overfitting; "
              "treino e teste baixos indicam underfitting.")
+    mostrar_codigo("overfit")
     comp = res["comparacao"]
     st.dataframe(comp.round(2), use_container_width=True)
 
     comp_melted = comp.melt(id_vars="Modelo", value_vars=["R² treino", "R² teste"], var_name="Dataset", value_name="R²")
     chart_comp = alt.Chart(comp_melted).mark_bar().encode(
-        x=alt.X("Modelo:N", title=""),
+        x=alt.X("Dataset:N", title="", axis=None),
         y=alt.Y("R²:Q", title="R²"),
-        color=alt.Color("Dataset:N", scale=alt.Scale(range=["steelblue", "chocolate"])),
-        column="Dataset:N"
-    ).properties(height=250)
-    st.altair_chart(chart_comp, use_container_width=True)
+        color=alt.Color("Dataset:N", title="Dataset",
+                        scale=alt.Scale(domain=["R² treino", "R² teste"],
+                                        range=["steelblue", "chocolate"])),
+        column=alt.Column("Modelo:N", title="",
+                          header=alt.Header(labelAngle=0, labelOrient="bottom", labelPadding=8)),
+        tooltip=["Modelo", "Dataset", alt.Tooltip("R²:Q", format=".2f")]
+    ).properties(width=90, height=250)
+    st.altair_chart(chart_comp, use_container_width=False)
 
     st.info("O Ridge tem R² de treino e de teste praticamente iguais, então **não há overfitting**. "
             "Porém o ganho do Gradient Boosting mostra que a relação tem partes não lineares que o "
@@ -466,6 +655,7 @@ with abas[5]:
             "simples, interpretável e fácil de levar ao deploy; modelos não lineares ficam como próximo passo.")
 
     st.subheader("Coeficientes do Ridge (variáveis padronizadas)")
+    # mostrar_codigo("coef")
     coef = pd.Series(pipe.named_steps["ridge"].coef_, index=res["X"].columns).sort_values()
     df_coef = coef.reset_index()
     df_coef.columns = ["Variável", "Coeficiente"]
@@ -488,13 +678,16 @@ with abas[6]:
     st.header("Deploy")
     st.write("Exportação do pipeline completo e treinado (scaler + Ridge) para um ficheiro externo "
              "(`modelo_concreto.joblib`) utilizando a biblioteca joblib. Ele é usado pelo simulador abaixo.")
-    st.code("joblib.dump(pipe, 'modelo_concreto.joblib')", language="python")
+    mostrar_codigo("joblib")
     st.download_button("⬇️ Baixar modelo_concreto.joblib", res["modelo_bytes"],
                        file_name="modelo_concreto.joblib")
 
     st.divider()
     st.header("Simulador de Resistência")
     st.write("Informe a dosagem e a idade de cura para estimar a resistência em MPa.")
+    st.write("O simulador monta uma linha com as mesmas features do treino e pede a previsão ao pipeline:")
+    # mostrar_codigo("entrada")
+    # mostrar_codigo("carregar_modelo")
 
     c1, c2, c3 = st.columns(3)
     with c1:
