@@ -26,7 +26,7 @@ URL_DATASET = "https://archive.ics.uci.edu/ml/machine-learning-databases/concret
 URL_IMAGEM = "https://i.postimg.cc/nzYgGKgB/images.jpg"
 
 # ----------------------------------------------------------------------------
-# Trechos de código exibidos no app (iguais aos do notebook)
+# Trechos de código exibidos no app
 # ----------------------------------------------------------------------------
 SNIPPETS = {
     # 1. Visão geral
@@ -180,7 +180,7 @@ def mostrar_codigo(chave, container=st):
 
 
 # ----------------------------------------------------------------------------
-# Funções de dados e modelo (com cache para o app ficar rápido)
+# Funções de dados e modelo
 # ----------------------------------------------------------------------------
 @st.cache_data
 def carregar_dados(arquivo_bytes=None):
@@ -216,7 +216,7 @@ def treinar_modelo(df):
     # Validação cruzada (5 folds) com alpha = 1.0
     scores_cv = cross_val_score(pipe, X_train, y_train, cv=5, scoring="r2")
 
-    # Busca do melhor alpha (somente dados de treino)
+    # Busca do melhor alpha
     parametros = {"ridge__alpha": [0.01, 0.1, 1, 10, 100]}
     busca = GridSearchCV(pipe, parametros, cv=5, scoring="r2")
     busca.fit(X_train, y_train)
@@ -243,7 +243,7 @@ def treinar_modelo(df):
     comparacao = pd.DataFrame(
         linhas, columns=["Modelo", "R² treino", "R² teste", "Diferença", "RMSE teste (MPa)"])
 
-    # Deploy: serializa o pipeline treinado em memória (evita erro de arquivo no Windows)
+    # Deploy
     buffer = io.BytesIO()
     joblib.dump(pipe, buffer)
     modelo_bytes = buffer.getvalue()
@@ -283,7 +283,7 @@ df, n_duplicados = preparar_dados(df_bruto)
 res = treinar_modelo(df)
 pipe = res["pipe"]
 
-# Dados brutos com as colunas renomeadas (como no notebook, antes de remover duplicados)
+# Dados brutos com as colunas renomeadas
 df_renomeado = df_bruto.copy()
 df_renomeado.columns = COLUNAS
 
